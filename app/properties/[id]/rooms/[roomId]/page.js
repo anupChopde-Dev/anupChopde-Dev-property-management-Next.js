@@ -4,18 +4,59 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Sidebar from '../../../../../components/Sidebar';
 import MobileNav from '../../../../../components/MobileNav';
-import Card, { CardContent, CardTitle, CardHeader } from '../../../../../components/Card';
+import Card, { CardContent, CardHeader, CardTitle } from '../../../../../components/Card';
 import Button from '../../../../../components/Button';
-import Input from '../../../../../components/Input';
-import { getProperties, getRooms, getRent, createRent, getElectricity, createElectricity } from '../../../../../lib/api';
-import { Home, User, DollarSign, Zap, Plus, ArrowLeft } from 'lucide-react';
+import Input, { Label, Textarea } from '../../../../../components/Input';
+import Select from '../../../../../components/Select';
+import Modal from '../../../../../components/Modal';
+import { getProperties, getRooms, getRent, createRent, addRentPayment, getElectricity, createElectricity } from '../../../../../lib/api';
+import { cn, statusStyles, currentMonth, monthOptions } from '../../../../../lib/utils';
+import {
+  Home,
+  User,
+  Phone,
+  Wallet,
+  Zap,
+  Plus,
+  ArrowLeft,
+  CalendarDays,
+  Receipt,
+  ShieldCheck,
+} from 'lucide-react';
+
+const emptyRentForm = {
+  month: '',
+  rentAmount: '',
+  notes: ''
+};
+
+const emptyElectricityForm = {
+  month: '',
+  billDate: '',
+  previousReading: '',
+  currentReading: '',
+  ratePerUnit: '',
+  fixedCharge: '0',
+  otherCharges: '0'
+};
+
+function Value({ label, value, tone = 'text-slate-900 dark:text-white' }) {
+  return (
+    <div>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        {label}
+      </p>
+      <p className={cn('mt-0.5 text-sm font-semibold', tone)}>{value}</p>
+    </div>
+  );
+}
 
 export default function RoomDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const propertyId = params.id;
   const roomId = params.roomId;
-  
+
   const [property, setProperty] = useState(null);
   const [room, setRoom] = useState(null);
   const [rentRecords, setRentRecords] = useState([]);
@@ -25,28 +66,31 @@ export default function RoomDetailsPage() {
   const [showRentModal, setShowRentModal] = useState(false);
   const [showElectricityModal, setShowElectricityModal] = useState(false);
 
-  const [rentFormData, setRentFormData] = useState({
-    month: '',
-    year: '',
-    rentAmount: '',
-    paidAmount: '',
-    paymentDate: '',
-    paymentMethod: '',
-    notes: ''
-  });
+  const [rentFormData, setRentFormData] = useState(emptyRentForm);
+  const [electricityFormData, setElectricityFormData] = useState(emptyElectricityForm);
+  const [monthOpts] = useState(() => monthOptions());
 
-  const [electricityFormData, setElectricityFormData] = useState({
-    month: '',
-    year: '',
-    billDate: '',
-    previousReading: '',
-    currentReading: '',
-    ratePerUnit: '',
-    otherCharges: ''
-  });
+  const openRentModal = () => {
+    setRentFormData({
+      month: currentMonth(),
+      rentAmount: room ? String(room.monthlyRent) : '',
+      notes: '',
+    });
+    setShowRentModal(true);
+  };
 
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const years = [2025, 2026, 2027];
+  const openElectricityModal = () => {
+    setElectricityFormData({
+      month: currentMonth(),
+      billDate: new Date().toISOString().slice(0, 10),
+      previousReading: '',
+      currentReading: '',
+      ratePerUnit: '8',
+      fixedCharge: '0',
+      otherCharges: '0',
+    });
+    setShowElectricityModal(true);
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -66,10 +110,10 @@ export default function RoomDetailsPage() {
         getElectricity()
       ]);
 
-      const propertyData = propertiesData.find(p => p.id === parseInt(propertyId));
-      const roomData = roomsData.find(r => r.id === parseInt(roomId));
-      const roomRentData = rentData.filter(r => r.roomId === parseInt(roomId));
-      const roomElectricityData = electricityData.filter(e => e.roomId === parseInt(roomId));
+      const propertyData = propertiesData.find(p => p.id === propertyId);
+      const roomData = roomsData.find(r => r.id === roomId);
+      const roomRentData = rentData.filter(r => r.roomId === roomId);
+      const roomElectricityData = electricityData.filter(e => e.roomId === roomId);
 
       setProperty(propertyData);
       setRoom(roomData);
@@ -85,62 +129,38 @@ export default function RoomDetailsPage() {
   const handleRentSubmit = async (e) => {
     e.preventDefault();
     try {
-      const rentData = {
-        roomId: parseInt(roomId),
+      await createRent({
+        roomId,
         month: rentFormData.month,
-        year: parseInt(rentFormData.year),
         rentAmount: parseFloat(rentFormData.rentAmount),
-        paidAmount: parseFloat(rentFormData.paidAmount),
-        paymentDate: rentFormData.paymentDate,
-        paymentMethod: rentFormData.paymentMethod,
-        notes: rentFormData.notes
-      };
-
-      await createRent(rentData);
-      setShowRentModal(false);
-      setRentFormData({
-        month: '',
-        year: '',
-        rentAmount: '',
-        paidAmount: '',
-        paymentDate: '',
-        paymentMethod: '',
-        notes: ''
+        notes: rentFormData.notes || undefined
       });
+      setShowRentModal(false);
+      setRentFormData(emptyRentForm);
       fetchData();
     } catch (error) {
-      console.error('Error saving rent:', error);
+      alert(error.message);
     }
   };
 
   const handleElectricitySubmit = async (e) => {
     e.preventDefault();
     try {
-      const electricityData = {
-        roomId: parseInt(roomId),
+      await createElectricity({
+        roomId,
         month: electricityFormData.month,
-        year: parseInt(electricityFormData.year),
         billDate: electricityFormData.billDate,
         previousReading: parseFloat(electricityFormData.previousReading),
         currentReading: parseFloat(electricityFormData.currentReading),
         ratePerUnit: parseFloat(electricityFormData.ratePerUnit),
-        otherCharges: parseFloat(electricityFormData.otherCharges)
-      };
-
-      await createElectricity(electricityData);
-      setShowElectricityModal(false);
-      setElectricityFormData({
-        month: '',
-        year: '',
-        billDate: '',
-        previousReading: '',
-        currentReading: '',
-        ratePerUnit: '',
-        otherCharges: ''
+        fixedCharge: parseFloat(electricityFormData.fixedCharge) || 0,
+        otherCharges: parseFloat(electricityFormData.otherCharges) || 0
       });
+      setShowElectricityModal(false);
+      setElectricityFormData(emptyElectricityForm);
       fetchData();
     } catch (error) {
-      console.error('Error saving electricity:', error);
+      alert(error.message);
     }
   };
 
@@ -149,177 +169,269 @@ export default function RoomDetailsPage() {
     return sortedRecords.length > 0 ? sortedRecords[0].currentReading : 0;
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Paid': return 'bg-green-100 text-green-700';
-      case 'Partial': return 'bg-yellow-100 text-yellow-700';
-      case 'Pending': return 'bg-red-100 text-red-700';
-      default: return 'bg-gray-100 text-gray-700';
-    }
-  };
+  const sortByRecency = (records) =>
+    [...records].sort((a, b) => (b.month || '').localeCompare(a.month || ''));
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 px-5 py-4 text-sm font-medium text-slate-500 shadow-sm dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-400">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          Loading room…
+        </div>
       </div>
     );
   }
 
   if (!room) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Room not found</div>
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="font-semibold text-slate-800 dark:text-slate-100">Room not found</p>
+            <Button className="mt-4" variant="secondary" onClick={() => router.push(`/properties/${propertyId}`)}>
+              Back to Property
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
+  const totalPaid = rentRecords.reduce((sum, record) => sum + (record.paidAmount || 0), 0);
+  const totalPending = rentRecords.reduce((sum, record) => sum + (record.remaining || 0), 0);
+  const totalElectricity = electricityRecords.reduce((sum, record) => sum + (record.total || 0), 0);
+
+  const summary = [
+    { label: 'Rent collected', value: `₹${totalPaid.toLocaleString()}`, icon: Wallet, tone: 'from-emerald-500 to-teal-500 shadow-emerald-500/25' },
+    { label: 'Rent pending', value: `₹${totalPending.toLocaleString()}`, icon: Receipt, tone: 'from-rose-500 to-orange-500 shadow-rose-500/25' },
+    { label: 'Electricity billed', value: `₹${totalElectricity.toLocaleString()}`, icon: Zap, tone: 'from-amber-400 to-yellow-500 shadow-amber-500/25' },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <Sidebar />
-      <main className="md:ml-64 pb-20 md:pb-0">
-        <div className="p-6">
-          <Button
-            variant="secondary"
-            className="mb-4"
-            onClick={() => router.push(`/properties/${propertyId}`)}
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
+      <main className="pb-24 md:ml-64 md:pb-10">
+        <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+          <Button variant="ghost" className="-ml-2 px-2" onClick={() => router.push(`/properties/${propertyId}`)}>
+            <ArrowLeft className="h-4 w-4" />
             Back to Property
           </Button>
 
-          <Card className="mb-6">
-            <CardContent className="p-6">
-              <div className="flex items-start gap-4">
-                <div className={`${room.occupied ? 'bg-green-100' : 'bg-gray-100'} p-4 rounded-full`}>
-                  <Home className={`w-8 h-8 ${room.occupied ? 'text-green-600' : 'text-gray-600'}`} />
-                </div>
-                <div className="flex-1">
-                  <h1 className="text-3xl font-bold text-gray-800">Room {room.roomNumber}</h1>
-                  <p className="text-gray-600 mt-2">{property?.name}</p>
-                  <span className={`inline-block mt-2 px-3 py-1 rounded-full text-sm ${room.occupied ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+          {/* Room banner */}
+          <section
+            className={cn(
+              'relative animate-fade-up overflow-hidden rounded-3xl p-6 text-white shadow-xl sm:p-8',
+              room.occupied
+                ? 'bg-gradient-to-br from-emerald-500 via-teal-500 to-teal-600 shadow-emerald-900/20'
+                : 'bg-gradient-to-br from-slate-500 via-slate-600 to-slate-700 shadow-slate-900/20'
+            )}
+          >
+            <div aria-hidden="true" className="absolute -right-16 -top-24 h-56 w-56 rounded-full bg-white/15 blur-2xl" />
+            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="min-w-0">
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset ring-white/25">
+                  <Home className="h-3.5 w-3.5" />
+                  Room {room.roomNumber}
+                </span>
+                <h1 className="mt-3 truncate text-2xl font-bold tracking-tight sm:text-3xl">
+                  {property?.name || 'Property'}
+                </h1>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-white/85">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 ring-1 ring-inset ring-white/20">
+                    <span className={cn('h-1.5 w-1.5 rounded-full', room.occupied ? 'bg-emerald-200' : 'bg-slate-300')} />
                     {room.occupied ? 'Occupied' : 'Vacant'}
                   </span>
+                  {room.occupied && room.tenantName && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <User className="h-4 w-4" />
+                      {room.tenantName}
+                    </span>
+                  )}
+                  {room.occupied && room.tenantPhone && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Phone className="h-4 w-4" />
+                      {room.tenantPhone}
+                    </span>
+                  )}
                 </div>
+                {room.notes && <p className="mt-3 max-w-xl text-sm text-white/75">{room.notes}</p>}
               </div>
 
-              {room.occupied && (
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <User className="w-5 h-5" />
-                    <span className="font-medium">{room.tenantName}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <span className="font-medium">{room.tenantPhone}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <DollarSign className="w-5 h-5" />
-                    <span className="font-medium">₹{room.monthlyRent?.toLocaleString()}/month</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <span className="font-medium">Security: ₹{room.securityDeposit?.toLocaleString()}</span>
-                  </div>
+              <div className="grid grid-cols-2 gap-3 sm:max-w-xs">
+                <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-inset ring-white/20">
+                  <p className="flex items-center gap-1.5 text-xs text-white/80">
+                    <Wallet className="h-3.5 w-3.5" />
+                    Monthly rent
+                  </p>
+                  <p className="mt-1 text-xl font-bold">₹{room.monthlyRent?.toLocaleString()}</p>
                 </div>
-              )}
-
-              {room.notes && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600">{room.notes}</p>
+                <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-inset ring-white/20">
+                  <p className="flex items-center gap-1.5 text-xs text-white/80">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Deposit
+                  </p>
+                  <p className="mt-1 text-xl font-bold">₹{room.securityDeposit?.toLocaleString()}</p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            </div>
+          </section>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Totals */}
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {summary.map((item) => (
+              <Card
+                key={item.label}
+                className="hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-900/5"
+              >
+                <CardContent className="flex items-center gap-4">
+                  <span
+                    className={cn(
+                      'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg',
+                      item.tone
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+                      {item.value}
+                    </p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">{item.label}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </section>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Card>
-              <CardHeader className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <CardHeader>
                 <CardTitle>Rent Records</CardTitle>
-                <Button onClick={() => setShowRentModal(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
+                <Button onClick={openRentModal}>
+                  <Plus className="h-4 w-4" />
                   Add Rent
                 </Button>
               </CardHeader>
-              <CardContent className="p-6">
+              <CardContent>
                 {rentRecords.length === 0 ? (
-                  <p className="text-gray-500 text-center py-4">No rent records found</p>
+                  <div className="py-10 text-center">
+                    <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/5 dark:text-slate-500">
+                      <Receipt className="h-6 w-6" />
+                    </span>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">No rent records found</p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
-                    {rentRecords
-                      .sort((a, b) => new Date(b.year, months.indexOf(b.month)) - new Date(a.year, months.indexOf(a.month)))
-                      .map((record) => (
-                        <div key={record.id} className="p-4 bg-gray-50 rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-semibold text-gray-800">{record.month} {record.year}</span>
-                            <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(record.status)}`}>
-                              {record.status}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <span className="text-gray-600">Rent:</span>
-                              <span className="font-medium ml-2">₹{record.rentAmount?.toLocaleString()}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Paid:</span>
-                              <span className="font-medium ml-2 text-green-600">₹{record.paidAmount?.toLocaleString()}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Remaining:</span>
-                              <span className="font-medium ml-2 text-red-600">₹{record.remaining?.toLocaleString()}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Date:</span>
-                              <span className="font-medium ml-2">{record.paymentDate || '-'}</span>
-                            </div>
-                          </div>
+                    {sortByRecency(rentRecords).map((record) => (
+                      <div
+                        key={record.id}
+                        className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 dark:border-white/5 dark:bg-white/5"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                            <CalendarDays className="h-4 w-4 text-slate-400" />
+                            {record.monthLabel || record.month}
+                          </span>
+                          <span
+                            className={cn(
+                              'rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset',
+                              statusStyles(record.status)
+                            )}
+                          >
+                            {record.status}
+                          </span>
                         </div>
-                      ))}
+                        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                          <Value label="Rent" value={`₹${record.rentAmount?.toLocaleString()}`} />
+                          <Value
+                            label="Paid"
+                            value={`₹${record.paidAmount?.toLocaleString()}`}
+                            tone="text-emerald-600 dark:text-emerald-400"
+                          />
+                          <Value
+                            label="Remaining"
+                            value={`₹${record.remaining?.toLocaleString()}`}
+                            tone="text-rose-600 dark:text-rose-400"
+                          />
+                          <Value label="Date" value={record.paymentDate || '—'} />
+                        </div>
+                        {record.remaining > 0 && (
+                          <div className="mt-3 text-right">
+                            <Button
+                              variant="outline"
+                              className="px-3 py-1.5 text-xs"
+                              onClick={async () => {
+                                const amount = prompt('Payment amount (₹):', String(record.remaining));
+                                if (!amount) return;
+                                try {
+                                  await addRentPayment(record.id, {
+                                    amount: parseFloat(amount),
+                                    paymentDate: new Date().toISOString().slice(0, 10),
+                                    paymentMethod: 'CASH',
+                                  });
+                                  fetchData();
+                                } catch (err) {
+                                  alert(err.message);
+                                }
+                              }}
+                            >
+                              Record Payment
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <CardHeader>
                 <CardTitle>Electricity Records</CardTitle>
-                <Button onClick={() => setShowElectricityModal(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Electricity
+                <Button onClick={openElectricityModal}>
+                  <Plus className="h-4 w-4" />
+                  Add Bill
                 </Button>
               </CardHeader>
-              <CardContent className="p-6">
+              <CardContent>
                 {electricityRecords.length === 0 ? (
-                  <p className="text-gray-500 text-center py-4">No electricity records found</p>
+                  <div className="py-10 text-center">
+                    <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/5 dark:text-slate-500">
+                      <Zap className="h-6 w-6" />
+                    </span>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">No electricity records found</p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
-                    {electricityRecords
-                      .sort((a, b) => new Date(b.year, months.indexOf(b.month)) - new Date(a.year, months.indexOf(a.month)))
-                      .map((record) => (
-                        <div key={record.id} className="p-4 bg-gray-50 rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-semibold text-gray-800">{record.month} {record.year}</span>
-                            <Zap className="w-5 h-5 text-yellow-600" />
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <span className="text-gray-600">Prev:</span>
-                              <span className="font-medium ml-2">{record.previousReading}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Curr:</span>
-                              <span className="font-medium ml-2">{record.currentReading}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Units:</span>
-                              <span className="font-medium ml-2">{record.units}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Total:</span>
-                              <span className="font-medium ml-2">₹{record.total?.toLocaleString()}</span>
-                            </div>
-                          </div>
+                    {sortByRecency(electricityRecords).map((record) => (
+                      <div
+                        key={record.id}
+                        className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 dark:border-white/5 dark:bg-white/5"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                            <CalendarDays className="h-4 w-4 text-slate-400" />
+                            {record.month} {record.year}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-400/25">
+                            <Zap className="h-3.5 w-3.5" />
+                            {record.units} units
+                          </span>
                         </div>
-                      ))}
+                        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                          <Value label="Previous" value={record.previousReading} />
+                          <Value label="Current" value={record.currentReading} />
+                          <Value label="Units" value={record.units} />
+                          <Value
+                            label="Total"
+                            value={`₹${record.total?.toLocaleString()}`}
+                            tone="text-amber-600 dark:text-amber-400"
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>
@@ -328,234 +440,145 @@ export default function RoomDetailsPage() {
         </div>
       </main>
 
-      {showRentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800">Add Rent</h2>
+      <Modal
+        open={showRentModal}
+        onClose={() => setShowRentModal(false)}
+        title="Add Rent"
+        subtitle={`Room ${room.roomNumber} · ${property?.name || ''}`}
+      >
+        <form onSubmit={handleRentSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="rent-month">Billing Month</Label>
+              <Input
+                id="rent-month"
+                type="month"
+                value={rentFormData.month}
+                onChange={(e) => setRentFormData({ ...rentFormData, month: e.target.value })}
+                required
+              />
             </div>
-            <form onSubmit={handleRentSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Month
-                </label>
-                <select
-                  value={rentFormData.month}
-                  onChange={(e) => setRentFormData({ ...rentFormData, month: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select Month</option>
-                  {months.map(month => (
-                    <option key={month} value={month}>{month}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Year
-                </label>
-                <select
-                  value={rentFormData.year}
-                  onChange={(e) => setRentFormData({ ...rentFormData, year: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select Year</option>
-                  {years.map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Rent Amount (₹)
-                </label>
-                <Input
-                  type="number"
-                  value={rentFormData.rentAmount}
-                  onChange={(e) => setRentFormData({ ...rentFormData, rentAmount: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Paid Amount (₹)
-                </label>
-                <Input
-                  type="number"
-                  value={rentFormData.paidAmount}
-                  onChange={(e) => setRentFormData({ ...rentFormData, paidAmount: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Date
-                </label>
-                <Input
-                  type="date"
-                  value={rentFormData.paymentDate}
-                  onChange={(e) => setRentFormData({ ...rentFormData, paymentDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Payment Method
-                </label>
-                <select
-                  value={rentFormData.paymentMethod}
-                  onChange={(e) => setRentFormData({ ...rentFormData, paymentMethod: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select Method</option>
-                  <option value="Cash">Cash</option>
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="UPI">UPI</option>
-                  <option value="Cheque">Cheque</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Notes
-                </label>
-                <textarea
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={rentFormData.notes}
-                  onChange={(e) => setRentFormData({ ...rentFormData, notes: e.target.value })}
-                  rows={3}
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => setShowRentModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" className="flex-1">
-                  Add Rent
-                </Button>
-              </div>
-            </form>
+            <div>
+              <Label htmlFor="rent-amount">Rent Amount (₹)</Label>
+              <Input
+                id="rent-amount"
+                type="number"
+                min="0"
+                value={rentFormData.rentAmount}
+                onChange={(e) => setRentFormData({ ...rentFormData, rentAmount: e.target.value })}
+                required
+              />
+            </div>
           </div>
-        </div>
-      )}
+          <div>
+            <Label htmlFor="rent-notes">Notes</Label>
+            <Textarea
+              id="rent-notes"
+              value={rentFormData.notes}
+              onChange={(e) => setRentFormData({ ...rentFormData, notes: e.target.value })}
+              placeholder="Optional"
+              rows={2}
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowRentModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" className="flex-1">Add Rent</Button>
+          </div>
+        </form>
+      </Modal>
 
-      {showElectricityModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800">Add Electricity</h2>
+      <Modal
+        open={showElectricityModal}
+        onClose={() => setShowElectricityModal(false)}
+        title="Add Electricity Bill"
+        subtitle={`Room ${room.roomNumber} · ${property?.name || ''}`}
+      >
+        <form onSubmit={handleElectricitySubmit} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="elec-month">Billing Month</Label>
+              <Input
+                id="elec-month"
+                type="month"
+                value={electricityFormData.month}
+                onChange={(e) => setElectricityFormData({ ...electricityFormData, month: e.target.value })}
+                required
+              />
             </div>
-            <form onSubmit={handleElectricitySubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Month
-                </label>
-                <select
-                  value={electricityFormData.month}
-                  onChange={(e) => setElectricityFormData({ ...electricityFormData, month: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select Month</option>
-                  {months.map(month => (
-                    <option key={month} value={month}>{month}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Year
-                </label>
-                <select
-                  value={electricityFormData.year}
-                  onChange={(e) => setElectricityFormData({ ...electricityFormData, year: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select Year</option>
-                  {years.map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Bill Date
-                </label>
-                <Input
-                  type="date"
-                  value={electricityFormData.billDate}
-                  onChange={(e) => setElectricityFormData({ ...electricityFormData, billDate: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Previous Reading
-                </label>
-                <Input
-                  type="number"
-                  value={electricityFormData.previousReading}
-                  onChange={(e) => setElectricityFormData({ ...electricityFormData, previousReading: e.target.value })}
-                  placeholder={`Auto: ${getPreviousReading()}`}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Current Reading
-                </label>
-                <Input
-                  type="number"
-                  value={electricityFormData.currentReading}
-                  onChange={(e) => setElectricityFormData({ ...electricityFormData, currentReading: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Rate Per Unit (₹)
-                </label>
-                <Input
-                  type="number"
-                  value={electricityFormData.ratePerUnit}
-                  onChange={(e) => setElectricityFormData({ ...electricityFormData, ratePerUnit: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Other Charges (₹)
-                </label>
-                <Input
-                  type="number"
-                  value={electricityFormData.otherCharges}
-                  onChange={(e) => setElectricityFormData({ ...electricityFormData, otherCharges: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => setShowElectricityModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" className="flex-1">
-                  Add Electricity
-                </Button>
-              </div>
-            </form>
+            <div>
+              <Label htmlFor="elec-bill-date">Bill Date</Label>
+              <Input
+                id="elec-bill-date"
+                type="date"
+                value={electricityFormData.billDate}
+                onChange={(e) => setElectricityFormData({ ...electricityFormData, billDate: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="elec-prev">Previous Reading</Label>
+              <Input
+                id="elec-prev"
+                type="number"
+                value={electricityFormData.previousReading}
+                onChange={(e) => setElectricityFormData({ ...electricityFormData, previousReading: e.target.value })}
+                placeholder={getPreviousReading() ? `Last: ${getPreviousReading()}` : 'Meter start'}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="elec-curr">Current Reading</Label>
+              <Input
+                id="elec-curr"
+                type="number"
+                value={electricityFormData.currentReading}
+                onChange={(e) => setElectricityFormData({ ...electricityFormData, currentReading: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="elec-rate">Rate Per Unit (₹)</Label>
+              <Input
+                id="elec-rate"
+                type="number"
+                value={electricityFormData.ratePerUnit}
+                onChange={(e) => setElectricityFormData({ ...electricityFormData, ratePerUnit: e.target.value })}
+                required
+              />
+            </div>
           </div>
-        </div>
-      )}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="elec-fixed">Fixed Charge (₹)</Label>
+              <Input
+                id="elec-fixed"
+                type="number"
+                min="0"
+                value={electricityFormData.fixedCharge}
+                onChange={(e) => setElectricityFormData({ ...electricityFormData, fixedCharge: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="elec-other">Other Charges (₹)</Label>
+              <Input
+                id="elec-other"
+                type="number"
+                min="0"
+                value={electricityFormData.otherCharges}
+                onChange={(e) => setElectricityFormData({ ...electricityFormData, otherCharges: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowElectricityModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" className="flex-1">Add Bill</Button>
+          </div>
+        </form>
+      </Modal>
 
       <MobileNav />
     </div>

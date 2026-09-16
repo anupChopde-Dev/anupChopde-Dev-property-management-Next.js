@@ -4,12 +4,18 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
 import MobileNav from '../../components/MobileNav';
-import Card, { CardContent, CardTitle } from '../../components/Card';
+import Card, { CardContent } from '../../components/Card';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
+import Select from '../../components/Select';
 import { getElectricity, getProperties, getRooms } from '../../lib/api';
-import { Download, Search, Zap } from 'lucide-react';
+import { cn, monthOptions } from '../../lib/utils';
+import { Download, Search, Zap, Gauge, Receipt, CircleDollarSign } from 'lucide-react';
 import jsPDF from 'jspdf';
+
+const thClass =
+  'whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400';
+const tdClass = 'whitespace-nowrap px-4 py-3.5 text-sm text-slate-700 dark:text-slate-200';
 
 export default function ElectricityPage() {
   const router = useRouter();
@@ -27,8 +33,7 @@ export default function ElectricityPage() {
     search: ''
   });
 
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const years = [2025, 2026, 2027];
+  const monthOpts = monthOptions();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -51,21 +56,7 @@ export default function ElectricityPage() {
         getRooms()
       ]);
 
-      const enrichedElectricity = electricityData.map(record => {
-        const room = roomsData.find(r => r.id === record.roomId);
-        const property = propertiesData.find(p => p.id === room?.propertyId);
-        return {
-          ...record,
-          roomNumber: room?.roomNumber,
-          tenantName: room?.tenantName,
-          propertyName: property?.name,
-          units: record.currentReading - record.previousReading,
-          electricityAmount: (record.currentReading - record.previousReading) * record.ratePerUnit,
-          total: (record.currentReading - record.previousReading) * record.ratePerUnit + record.otherCharges
-        };
-      });
-
-      setElectricityRecords(enrichedElectricity);
+      setElectricityRecords(electricityData);
       setProperties(propertiesData);
       setRooms(roomsData);
     } catch (error) {
@@ -94,7 +85,7 @@ export default function ElectricityPage() {
     }
 
     if (filters.year) {
-      filtered = filtered.filter(r => r.year === parseInt(filters.year));
+      filtered = filtered.filter(r => String(r.year) === String(filters.year));
     }
 
     if (filters.search) {
@@ -115,19 +106,20 @@ export default function ElectricityPage() {
 
   const downloadPDF = () => {
     const doc = new jsPDF();
-    
+
     doc.setFontSize(18);
     doc.text('Electricity Report', 14, 22);
-    
+
     doc.setFontSize(10);
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 30);
-    
+
     if (filters.propertyId) {
       const prop = properties.find(p => p.id === parseInt(filters.propertyId));
       doc.text(`Property: ${prop?.name || 'All'}`, 14, 38);
     }
     if (filters.month) {
-      doc.text(`Month: ${filters.month}`, 14, 44);
+      const m = monthOpts.find(o => o.value === filters.month);
+      doc.text(`Month: ${m?.label || filters.month}`, 14, 44);
     }
     if (filters.year) {
       doc.text(`Year: ${filters.year}`, 14, 50);
@@ -160,7 +152,7 @@ export default function ElectricityPage() {
       doc.text(record.propertyName || '-', 14, y);
       doc.text(record.roomNumber || '-', 40, y);
       doc.text(record.tenantName || '-', 55, y);
-      doc.text(`${record.month} ${record.year}`, 85, y);
+      doc.text(record.monthLabel || `${record.month} ${record.year}`, 85, y);
       doc.text(record.billDate || '-', 105, y);
       doc.text(record.previousReading.toString(), 125, y);
       doc.text(record.currentReading.toString(), 140, y);
@@ -188,8 +180,11 @@ export default function ElectricityPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 px-5 py-4 text-sm font-medium text-slate-500 shadow-sm dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-400">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          Loading electricity records…
+        </div>
       </div>
     );
   }
@@ -199,150 +194,160 @@ export default function ElectricityPage() {
   const totalOtherCharges = filteredRecords.reduce((sum, r) => sum + r.otherCharges, 0);
   const totalAmount = filteredRecords.reduce((sum, r) => sum + r.total, 0);
 
+  const stats = [
+    { label: 'Total Units', value: totalUnits.toLocaleString(), icon: Gauge, tone: 'from-amber-400 to-yellow-500 shadow-amber-500/25' },
+    { label: 'Electricity', value: `₹${totalElectricity.toLocaleString()}`, icon: Zap, tone: 'from-emerald-500 to-teal-500 shadow-emerald-500/25' },
+    { label: 'Other Charges', value: `₹${totalOtherCharges.toLocaleString()}`, icon: Receipt, tone: 'from-sky-500 to-cyan-500 shadow-sky-500/25' },
+    { label: 'Total Amount', value: `₹${totalAmount.toLocaleString()}`, icon: CircleDollarSign, tone: 'from-violet-500 to-purple-500 shadow-violet-500/25' },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <Sidebar />
-      <main className="md:ml-64 pb-20 md:pb-0">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-gray-800">Electricity</h1>
+      <main className="pb-24 md:ml-64 md:pb-10">
+        <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+          <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-500 text-white shadow-lg shadow-amber-500/25">
+                <Zap className="h-5 w-5" />
+              </span>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Electricity</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {filteredRecords.length} of {electricityRecords.length} bills
+                </p>
+              </div>
+            </div>
             <Button onClick={downloadPDF}>
-              <Download className="w-5 h-5 mr-2" />
+              <Download className="h-5 w-5" />
               Download PDF
             </Button>
-          </div>
+          </header>
 
-          <Card className="mb-6">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                    <Input
-                      placeholder="Search by tenant, property, or room..."
-                      value={filters.search}
-                      onChange={(e) => handleFilterChange('search', e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-                
-                <select
-                  value={filters.propertyId}
-                  onChange={(e) => handleFilterChange('propertyId', e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Properties</option>
-                  {properties.map(prop => (
-                    <option key={prop.id} value={prop.id}>{prop.name}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={filters.roomId}
-                  onChange={(e) => handleFilterChange('roomId', e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Rooms</option>
-                  {rooms.map(room => (
-                    <option key={room.id} value={room.id}>Room {room.roomNumber}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={filters.month}
-                  onChange={(e) => handleFilterChange('month', e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Months</option>
-                  {months.map(month => (
-                    <option key={month} value={month}>{month}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={filters.year}
-                  onChange={(e) => handleFilterChange('year', e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Years</option>
-                  {years.map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
+          <Card>
+            <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="relative sm:col-span-2 lg:col-span-4">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  placeholder="Search tenant, property or room…"
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  className="pl-10"
+                />
               </div>
+
+              <Select
+                value={filters.propertyId}
+                onChange={(e) => handleFilterChange('propertyId', e.target.value)}
+              >
+                <option value="">All Properties</option>
+                {properties.map(prop => (
+                  <option key={prop.id} value={prop.id}>{prop.name}</option>
+                ))}
+              </Select>
+
+              <Select
+                value={filters.roomId}
+                onChange={(e) => handleFilterChange('roomId', e.target.value)}
+              >
+                <option value="">All Rooms</option>
+                {rooms.map(room => (
+                  <option key={room.id} value={room.id}>Room {room.roomNumber}</option>
+                ))}
+              </Select>
+
+              <Select
+                value={filters.month}
+                onChange={(e) => handleFilterChange('month', e.target.value)}
+              >
+                <option value="">All Months</option>
+                {monthOpts.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </Select>
+
+              <Select
+                value={filters.year}
+                onChange={(e) => handleFilterChange('year', e.target.value)}
+                className="sm:col-span-2 lg:col-span-1"
+              >
+                <option value="">All Years</option>
+                {[...new Set(monthOpts.map(o => o.value.slice(0, 4)))].map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </Select>
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className="bg-yellow-100 p-3 rounded-full">
-                    <Zap className="w-6 h-6 text-yellow-600" />
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {stats.map((stat) => (
+              <Card key={stat.label} className="hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-900/5">
+                <CardContent className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{stat.label}</p>
+                    <p className="mt-1 truncate text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                      {stat.value}
+                    </p>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Total Units</p>
-                    <p className="text-2xl font-bold text-gray-800">{totalUnits}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <p className="text-sm text-gray-600">Total Electricity</p>
-                <p className="text-2xl font-bold text-gray-800">₹{totalElectricity.toLocaleString()}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <p className="text-sm text-gray-600">Other Charges</p>
-                <p className="text-2xl font-bold text-gray-800">₹{totalOtherCharges.toLocaleString()}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-6">
-                <p className="text-sm text-gray-600">Total Amount</p>
-                <p className="text-2xl font-bold text-blue-600">₹{totalAmount.toLocaleString()}</p>
-              </CardContent>
-            </Card>
-          </div>
+                  <span
+                    className={cn(
+                      'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg',
+                      stat.tone
+                    )}
+                  >
+                    <stat.icon className="h-5 w-5" />
+                  </span>
+                </CardContent>
+              </Card>
+            ))}
+          </section>
 
-          <Card>
+          <Card className="overflow-hidden">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
+                <table className="w-full min-w-[64rem]">
+                  <thead className="bg-slate-50/80 dark:bg-white/5">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Property</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tenant</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Month</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bill Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prev</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Curr</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Units</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Elec</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Other</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                      <th className={thClass}>Property</th>
+                      <th className={thClass}>Room</th>
+                      <th className={thClass}>Tenant</th>
+                      <th className={thClass}>Month</th>
+                      <th className={thClass}>Bill Date</th>
+                      <th className={thClass}>Prev</th>
+                      <th className={thClass}>Curr</th>
+                      <th className={thClass}>Units</th>
+                      <th className={thClass}>Rate</th>
+                      <th className={thClass}>Elec</th>
+                      <th className={thClass}>Other</th>
+                      <th className={thClass}>Total</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody>
                     {filteredRecords.map((record) => (
-                      <tr key={record.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{record.propertyName || '-'}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{record.roomNumber || '-'}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{record.tenantName || 'Vacant'}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{record.month} {record.year}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{record.billDate || '-'}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{record.previousReading}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{record.currentReading}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{record.units}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">₹{record.ratePerUnit}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">₹{record.electricityAmount.toLocaleString()}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">₹{record.otherCharges.toLocaleString()}</td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">₹{record.total.toLocaleString()}</td>
+                      <tr
+                        key={record.id}
+                        className="border-t border-slate-100 transition-colors hover:bg-amber-50/60 dark:border-white/5 dark:hover:bg-white/5"
+                      >
+                        <td className={cn(tdClass, 'font-medium text-slate-900 dark:text-white')}>
+                          {record.propertyName || '-'}
+                        </td>
+                        <td className={tdClass}>{record.roomNumber || '-'}</td>
+                        <td className={tdClass}>{record.tenantName || 'Vacant'}</td>
+                        <td className={tdClass}>{record.monthLabel || record.month}</td>
+                        <td className={tdClass}>{record.billDate || '-'}</td>
+                        <td className={tdClass}>{record.previousReading}</td>
+                        <td className={tdClass}>{record.currentReading}</td>
+                        <td className="whitespace-nowrap px-4 py-3.5">
+                          <span className="inline-block rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-400/25">
+                            {record.units}
+                          </span>
+                        </td>
+                        <td className={tdClass}>₹{record.ratePerUnit}</td>
+                        <td className={tdClass}>₹{record.electricityAmount.toLocaleString()}</td>
+                        <td className={tdClass}>₹{record.otherCharges.toLocaleString()}</td>
+                        <td className={cn(tdClass, 'font-semibold text-slate-900 dark:text-white')}>
+                          ₹{record.total.toLocaleString()}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -350,8 +355,16 @@ export default function ElectricityPage() {
               </div>
 
               {filteredRecords.length === 0 && (
-                <div className="text-center py-12">
-                  <p className="text-gray-500">No electricity records found</p>
+                <div className="py-14 text-center">
+                  <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/5 dark:text-slate-500">
+                    <Zap className="h-6 w-6" />
+                  </span>
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                    No electricity records found
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                    Try clearing one of the filters above.
+                  </p>
                 </div>
               )}
             </CardContent>

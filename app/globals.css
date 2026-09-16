@@ -1,26 +1,125 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Brand scale (emerald -> teal), used for accents, gradients and focus rings */
+  --color-brand-50: #ecfdf5;
+  --color-brand-100: #d1fae5;
+  --color-brand-200: #a7f3d0;
+  --color-brand-300: #6ee7b7;
+  --color-brand-400: #34d399;
+  --color-brand-500: #10b981;
+  --color-brand-600: #059669;
+  --color-brand-700: #047857;
+  --color-brand-800: #065f46;
+  --color-brand-900: #064e3b;
+  --color-brand-950: #022c22;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --animate-fade-up: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.3s ease-out both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Soft coloured "aura" painted behind the whole app (see app/layout.js) */
+.app-aura {
+  background-image: radial-gradient(
+      60rem 32rem at 105% -10%,
+      rgba(16, 185, 129, 0.16),
+      transparent 60%
+    ),
+    radial-gradient(45rem 26rem at -10% 0%, rgba(13, 148, 136, 0.14), transparent 55%),
+    radial-gradient(40rem 24rem at 50% 115%, rgba(56, 189, 248, 0.1), transparent 60%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .app-aura {
+    background-image: radial-gradient(
+        60rem 32rem at 105% -10%,
+        rgba(16, 185, 129, 0.2),
+        transparent 60%
+      ),
+      radial-gradient(45rem 26rem at -10% 0%, rgba(20, 184, 166, 0.16), transparent 55%),
+      radial-gradient(40rem 24rem at 50% 115%, rgba(14, 165, 233, 0.12), transparent 60%);
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: rgba(16, 185, 129, 0.28);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: rgba(100, 116, 139, 0.35);
+    background-clip: content-box;
+    border: 3px solid transparent;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(16, 185, 129, 0.6);
+  }
+
+  /* Keep date/number pickers readable when the OS is in dark mode */
+  @media (prefers-color-scheme: dark) {
+    input[type="date"],
+    input[type="number"],
+    select {
+      color-scheme: dark;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
